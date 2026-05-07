@@ -1,0 +1,22 @@
+# OpenJarvis manual-install target (when cloned inside this repo)
+/OpenJarvis/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.local
+
+# uv
+.uv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
