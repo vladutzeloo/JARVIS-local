@@ -4,11 +4,54 @@ End-to-end local setup for [OpenJarvis](https://github.com/open-jarvis/OpenJarvi
 with [Ollama](https://ollama.com) and [Qwen2.5-Coder](https://ollama.com/library/qwen2.5-coder)
 for local code assistance.
 
-## Quick start
+## Windows + WSL2 (recommended for the 4070 laptop)
+
+You install Ubuntu under WSL2 once, then everything below runs inside it. The
+NVIDIA driver lives on Windows; WSL2 sees the GPU automatically.
+
+**One-time, in admin PowerShell:**
+
+```powershell
+wsl --install -d Ubuntu-24.04
+# reboot if prompted
+wsl --update
+```
+
+**On the Windows side, also make sure of:**
+
+- Latest NVIDIA Game Ready or Studio driver (R535+).
+  https://www.nvidia.com/Download/index.aspx
+  *Don't* install a CUDA toolkit inside Ubuntu — the Windows driver provides
+  `libcuda.so` to WSL via `/usr/lib/wsl/lib/`.
+- WSL version: `wsl --version` (need WSL 2, kernel 5.10+).
+
+**Inside Ubuntu:**
 
 ```bash
-git clone <this-repo> JARVIS-local
+git clone https://github.com/vladutzeloo/JARVIS-local.git
 cd JARVIS-local
+./bootstrap-ubuntu.sh
+```
+
+`bootstrap-ubuntu.sh` installs the apt prerequisites (`curl`, `git`,
+`build-essential`, `python3-venv`, `jq`, …), checks `nvidia-smi` works, then
+hands off to `setup.sh`.
+
+Verify the GPU is visible inside WSL2:
+
+```bash
+nvidia-smi   # should print: NVIDIA GeForce RTX 4070 Laptop GPU, 8 GB
+```
+
+## Quick start (Linux bare-metal)
+
+If you're already on Ubuntu/Debian Linux directly (no WSL):
+
+```bash
+git clone https://github.com/vladutzeloo/JARVIS-local.git
+cd JARVIS-local
+./bootstrap-ubuntu.sh    # apt deps + GPU check + setup.sh
+# or if your system already has curl/git/build-essential:
 ./setup.sh
 ```
 
@@ -85,15 +128,19 @@ ollama ps                            # see what's loaded in VRAM
 
 ## Requirements
 
-- Linux (incl. WSL2) or macOS. The script targets Linux for the daemon flow;
-  on macOS Ollama runs as a desktop app.
-- `curl`, `git`
-- For NVIDIA: working proprietary driver (`nvidia-smi` should print your GPU).
-  Ollama detects CUDA automatically — no extra config needed.
-- ~10–15 GB free disk for OpenJarvis + a 7B model.
+- Ubuntu 22.04 / 24.04 (bare-metal or WSL2). macOS works for OpenJarvis but
+  the install paths in this repo target Linux.
+- For NVIDIA on WSL2: latest Windows driver only — no CUDA toolkit inside
+  Ubuntu.
+- For NVIDIA on bare-metal Linux: the proprietary driver (`nvidia-smi` must
+  print your GPU). Ollama detects CUDA automatically.
+- ~25 GB free disk (OpenJarvis + Ollama + 14B + 7B model).
 
 ## Troubleshooting
 
+- **`nvidia-smi` not found inside WSL2** — install the latest NVIDIA driver
+  on Windows, then in admin PowerShell: `wsl --update && wsl --shutdown`.
+  Reopen Ubuntu and retry. Don't install the CUDA toolkit in Ubuntu.
 - **Installer host blocked** — `setup.sh` automatically falls back to the
   manual `uv sync` install. No action needed.
 - **`uv: command not found` after install** — open a new shell, or
@@ -102,7 +149,10 @@ ollama ps                            # see what's loaded in VRAM
   to see who's holding it; `systemctl status ollama` for the service.
   Logs from the script's fallback start are at `/tmp/ollama.log`.
 - **Model is slow / partially on CPU** — `ollama ps` shows GPU vs CPU split.
-  Drop to a smaller tag (e.g. `qwen2.5-coder:7b-instruct-q4_K_S`).
+  Drop to a smaller tag (e.g. `qwen2.5-coder:7b-instruct-q4_K_S`) or set
+  `OLLAMA_MODEL=qwen2.5-coder:7b` and re-run setup.
+- **WSL2 RAM cap too low** — create `%USERPROFILE%\.wslconfig` on Windows
+  with `[wsl2]` `memory=20GB` (or similar), then `wsl --shutdown`.
 - **`jarvis doctor` shows engines unreachable** — that's fine for engines
   you don't use. Only `ollama` needs to be reachable.
 
