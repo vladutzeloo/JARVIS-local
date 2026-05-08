@@ -1,7 +1,8 @@
 # JARVIS-local
 
-Local setup for [OpenJarvis](https://github.com/open-jarvis/OpenJarvis) — a
-framework for running personal AI agents on personal devices.
+End-to-end local setup for [OpenJarvis](https://github.com/open-jarvis/OpenJarvis)
+with [Ollama](https://ollama.com) and [Qwen2.5-Coder](https://ollama.com/library/qwen2.5-coder)
+for local code assistance.
 
 ## Quick start
 
@@ -11,59 +12,95 @@ cd JARVIS-local
 ./setup.sh
 ```
 
-`setup.sh` tries the official one-line installer first, and falls back to a
-manual developer install (clone + `uv sync --extra dev`) if the installer
-host is unreachable.
+That runs:
 
-By default the manual install lands in `~/OpenJarvis`. Override with:
+1. **OpenJarvis** — official `openjarvis.ai/install.sh`, with a clone +
+   `uv sync --extra dev` fallback if the host is blocked.
+2. **Ollama** — installs if missing, ensures the daemon on `:11434` is up.
+3. **Qwen2.5-Coder** — pulls the model into Ollama.
+4. **`jarvis init`** — generates `~/.openjarvis/config.toml` with the
+   `code-assistant` preset wired to the `ollama` engine.
 
-```bash
-OPENJARVIS_DIR=/path/to/openjarvis ./setup.sh
-```
-
-## What gets installed
-
-Per the upstream installer:
-
-- [`uv`](https://docs.astral.sh/uv/) (Python package/venv manager)
-- A Python virtual environment for OpenJarvis
-- [Ollama](https://ollama.com/) and a starter local model
-
-The manual fallback installs `uv` and the OpenJarvis Python deps, but **does
-not** install Ollama. Install it separately if you need it:
+When it finishes:
 
 ```bash
-curl -fsSL https://ollama.com/install.sh | sh
+cd ~/OpenJarvis
+uv run jarvis doctor
+uv run jarvis ask "write a quicksort in python"
+uv run jarvis chat
 ```
+
+## Picking the right Qwen model for your GPU
+
+| GPU VRAM | Recommended model     | Approx size (Q4_K_M) | Notes                                    |
+|----------|-----------------------|----------------------|------------------------------------------|
+| 6 GB     | `qwen2.5-coder:3b`    | ~2.0 GB              | Snappy, weaker reasoning.                |
+| 8 GB     | `qwen2.5-coder:7b`    | ~4.7 GB              | **Default.** Good speed + quality.       |
+| 12 GB    | `qwen2.5-coder:14b`   | ~9.0 GB              | Stronger; fits fully on GPU.             |
+| 16+ GB   | `qwen2.5-coder:32b`   | ~20 GB               | Best in family; needs a desktop GPU.     |
+
+**RTX 4070 Mobile (8 GB VRAM, 24 GB RAM):** the default `qwen2.5-coder:7b`
+runs entirely on the GPU and is the right starting point. You can also try
+`qwen2.5-coder:14b` — Ollama will offload extra layers to system RAM (you
+have plenty), at the cost of speed.
+
+```bash
+OLLAMA_MODEL=qwen2.5-coder:14b ./setup.sh   # to override
+```
+
+## Tunables
+
+```bash
+OPENJARVIS_DIR=~/code/OpenJarvis ./setup.sh   # custom install dir
+OLLAMA_MODEL=qwen2.5-coder:14b ./setup.sh     # bigger model
+JARVIS_PRESET=chat-simple    ./setup.sh       # different preset
+SKIP_OLLAMA=1                ./setup.sh       # only OpenJarvis
+SKIP_MODEL_PULL=1            ./setup.sh       # skip the GB download
+SKIP_INIT=1                  ./setup.sh       # don't write config
+```
+
+Available presets: `morning-digest-mac`, `morning-digest-linux`,
+`morning-digest-minimal`, `deep-research`, `code-assistant` (default),
+`scheduled-monitor`, `chat-simple`.
 
 ## Common commands
 
 ```bash
-jarvis doctor                       # check system status
-jarvis init --preset chat-simple    # initialize with a preset
-uv run jarvis ask "your query"      # ask a question
-uv run pytest tests/ -v             # run tests (manual install only)
+jarvis doctor                        # health check
+jarvis quickstart                    # guided 5-step setup (alternative to init)
+uv run jarvis ask "your query"       # one-shot
+uv run jarvis chat                   # multi-turn
+uv run jarvis model list             # models known to running engines
+uv run jarvis model pull qwen2.5-coder:14b
+uv run jarvis config show            # inspect ~/.openjarvis/config.toml
+uv run jarvis config set engine.ollama.default_model qwen2.5-coder:14b
+ollama ps                            # see what's loaded in VRAM
 ```
-
-Available presets: `morning-digest-mac`, `morning-digest-linux`,
-`morning-digest-minimal`, `deep-research`, `code-assistant`,
-`scheduled-monitor`, `chat-simple`.
 
 ## Requirements
 
-- macOS (Intel/Apple Silicon), Linux, or WSL2 on Windows
-- Python 3.10+
-- `curl` and `git`
+- Linux (incl. WSL2) or macOS. The script targets Linux for the daemon flow;
+  on macOS Ollama runs as a desktop app.
+- `curl`, `git`
+- For NVIDIA: working proprietary driver (`nvidia-smi` should print your GPU).
+  Ollama detects CUDA automatically — no extra config needed.
+- ~10–15 GB free disk for OpenJarvis + a 7B model.
 
 ## Troubleshooting
 
-- **`openjarvis.ai` blocked / 403** — your network blocks the installer host.
-  `setup.sh` automatically falls back to the manual install path.
+- **Installer host blocked** — `setup.sh` automatically falls back to the
+  manual `uv sync` install. No action needed.
 - **`uv: command not found` after install** — open a new shell, or
   `source ~/.local/bin/env`.
-- **Ollama not running** — `ollama serve &` then retry.
+- **Ollama daemon won't start / port 11434 busy** — `ss -ltnp | grep 11434`
+  to see who's holding it; `systemctl status ollama` for the service.
+  Logs from the script's fallback start are at `/tmp/ollama.log`.
+- **Model is slow / partially on CPU** — `ollama ps` shows GPU vs CPU split.
+  Drop to a smaller tag (e.g. `qwen2.5-coder:7b-instruct-q4_K_S`).
+- **`jarvis doctor` shows engines unreachable** — that's fine for engines
+  you don't use. Only `ollama` needs to be reachable.
 
 ## License
 
-OpenJarvis itself is Apache 2.0. This repo is your local config/setup; license
-as you see fit.
+OpenJarvis itself is Apache 2.0. This repo (your local setup) — license as
+you wish.
