@@ -16,26 +16,26 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+log()  { printf '\033[1;34m[bootstrap]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[warn]\033[0m      %s\n' "$*"; }
+err()  { printf '\033[1;31m[err]\033[0m       %s\n' "$*" >&2; }
+
 SUDO=""
 if [ "$(id -u)" != "0" ]; then
     if command -v sudo >/dev/null 2>&1; then
         SUDO="sudo"
     else
-        printf '\033[1;31m[err]\033[0m   not root and sudo not installed\n' >&2
+        err "not root and sudo not installed"
         exit 1
     fi
 fi
-
-log()  { printf '\033[1;34m[bootstrap]\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m[warn]\033[0m      %s\n' "$*"; }
-err()  { printf '\033[1;31m[err]\033[0m       %s\n' "$*" >&2; }
 
 if [ ! -f /etc/os-release ] || ! grep -qi 'ubuntu\|debian' /etc/os-release; then
     warn "this script targets Ubuntu/Debian; continuing anyway"
 fi
 
 log "apt-get update"
-$SUDO apt-get update -y
+$SUDO apt-get update
 
 log "installing prerequisites"
 $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -46,10 +46,8 @@ $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends 
     pkg-config \
     python3 \
     python3-venv \
-    python3-pip \
     jq \
-    unzip \
-    lsb-release
+    unzip
 
 # WSL2 detection + GPU sanity
 if grep -qi microsoft /proc/version 2>/dev/null; then
@@ -78,10 +76,11 @@ else
     fi
 fi
 
-if [ ! -x "$SCRIPT_DIR/setup.sh" ]; then
-    err "setup.sh not found or not executable at $SCRIPT_DIR/setup.sh"
+if [ ! -f "$SCRIPT_DIR/setup.sh" ]; then
+    err "setup.sh not found at $SCRIPT_DIR/setup.sh"
     exit 1
 fi
+chmod +x "$SCRIPT_DIR/setup.sh"
 
 log "handing off to setup.sh"
 exec "$SCRIPT_DIR/setup.sh" "$@"
