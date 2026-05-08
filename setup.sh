@@ -9,11 +9,10 @@
 #
 # Tunables (env vars):
 #   OPENJARVIS_DIR     Where to put the OpenJarvis source (default: ~/OpenJarvis).
-#   OLLAMA_MODEL       Model tag to pull (default: qwen2.5-coder:7b).
-#                      For the 4070 Mobile (8 GB VRAM) try:
-#                        qwen2.5-coder:7b      ~4.7 GB, fast, fully on GPU
-#                        qwen2.5-coder:14b     ~9 GB, partial offload to RAM
-#   JARVIS_PRESET      jarvis init preset (default: code-assistant).
+#   OLLAMA_MODEL           Primary model (default: qwen2.5-coder:14b).
+#   OLLAMA_FALLBACK_MODEL  Fast fallback (default: qwen2.5-coder:7b).
+#                          Set OLLAMA_FALLBACK_MODEL="" to skip pulling it.
+#   JARVIS_PRESET          jarvis init preset (default: code-assistant).
 #   SKIP_OLLAMA=1      Don't install/start Ollama or pull a model.
 #   SKIP_MODEL_PULL=1  Don't pull the model (still installs Ollama).
 #   SKIP_INIT=1        Don't run `jarvis init`.
@@ -23,7 +22,8 @@ set -euo pipefail
 OPENJARVIS_REPO="https://github.com/open-jarvis/OpenJarvis.git"
 INSTALL_URL="https://openjarvis.ai/install.sh"
 TARGET_DIR="${OPENJARVIS_DIR:-$HOME/OpenJarvis}"
-OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:14b}"
+OLLAMA_FALLBACK_MODEL="${OLLAMA_FALLBACK_MODEL:-qwen2.5-coder:7b}"
 JARVIS_PRESET="${JARVIS_PRESET:-code-assistant}"
 SKIP_OLLAMA="${SKIP_OLLAMA:-0}"
 SKIP_MODEL_PULL="${SKIP_MODEL_PULL:-0}"
@@ -128,10 +128,14 @@ ensure_ollama() {
 }
 
 pull_model() {
-    log "pulling $OLLAMA_MODEL (this can take a few minutes)"
+    log "pulling primary model: $OLLAMA_MODEL (this can take a few minutes)"
     ollama pull "$OLLAMA_MODEL"
-    log "model ready:"
-    ollama list | grep -E "NAME|$OLLAMA_MODEL" || true
+    if [ -n "$OLLAMA_FALLBACK_MODEL" ] && [ "$OLLAMA_FALLBACK_MODEL" != "$OLLAMA_MODEL" ]; then
+        log "pulling fallback model: $OLLAMA_FALLBACK_MODEL"
+        ollama pull "$OLLAMA_FALLBACK_MODEL"
+    fi
+    log "models ready:"
+    ollama list || true
 }
 
 init_jarvis() {
@@ -144,10 +148,14 @@ init_jarvis() {
         --no-download \
         --no-scan
 
-    # Point the default model at the one we pulled (the code-assistant preset
-    # ships a placeholder tag that isn't on Ollama).
+    # Point default + fallback at the models we pulled (the code-assistant
+    # preset ships a placeholder tag that isn't on Ollama).
     uv run jarvis config set intelligence.default_model "$OLLAMA_MODEL" \
         || warn "could not set intelligence.default_model (jarvis may auto-route)"
+    if [ -n "$OLLAMA_FALLBACK_MODEL" ] && [ "$OLLAMA_FALLBACK_MODEL" != "$OLLAMA_MODEL" ]; then
+        uv run jarvis config set intelligence.fallback_model "$OLLAMA_FALLBACK_MODEL" \
+            || warn "could not set intelligence.fallback_model"
+    fi
 }
 
 gpu_hint() {

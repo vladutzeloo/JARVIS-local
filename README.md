@@ -17,9 +17,12 @@ That runs:
 1. **OpenJarvis** — official `openjarvis.ai/install.sh`, with a clone +
    `uv sync --extra dev` fallback if the host is blocked.
 2. **Ollama** — installs if missing, ensures the daemon on `:11434` is up.
-3. **Qwen2.5-Coder** — pulls the model into Ollama.
+3. **Qwen2.5-Coder** — pulls **`qwen2.5-coder:14b`** (primary, best quality
+   that fits on a 4070 Mobile with partial offload) and
+   **`qwen2.5-coder:7b`** (fast fallback, fully GPU-resident).
 4. **`jarvis init`** — generates `~/.openjarvis/config.toml` with the
-   `code-assistant` preset wired to the `ollama` engine.
+   `code-assistant` preset wired to the `ollama` engine, then sets
+   `intelligence.default_model` and `intelligence.fallback_model`.
 
 When it finishes:
 
@@ -39,24 +42,27 @@ uv run jarvis chat
 | 12 GB    | `qwen2.5-coder:14b`   | ~9.0 GB              | Stronger; fits fully on GPU.             |
 | 16+ GB   | `qwen2.5-coder:32b`   | ~20 GB               | Best in family; needs a desktop GPU.     |
 
-**RTX 4070 Mobile (8 GB VRAM, 24 GB RAM):** the default `qwen2.5-coder:7b`
-runs entirely on the GPU and is the right starting point. You can also try
-`qwen2.5-coder:14b` — Ollama will offload extra layers to system RAM (you
-have plenty), at the cost of speed.
+**RTX 4070 Mobile (8 GB VRAM, 24 GB RAM):** the default setup pulls **both**
+`qwen2.5-coder:14b` (primary, ~85% GPU + ~15% RAM offload, 15–25 tok/s,
+strongest quality) and `qwen2.5-coder:7b` (fallback, 100% GPU,
+50–80 tok/s). OpenJarvis will use 14B by default and fall back to 7B when
+appropriate. To override:
 
 ```bash
-OLLAMA_MODEL=qwen2.5-coder:14b ./setup.sh   # to override
+OLLAMA_MODEL=qwen2.5-coder:7b OLLAMA_FALLBACK_MODEL="" ./setup.sh   # only fast 7B
+OLLAMA_MODEL=qwen2.5-coder:32b ./setup.sh                            # max quality, slow
 ```
 
 ## Tunables
 
 ```bash
-OPENJARVIS_DIR=~/code/OpenJarvis ./setup.sh   # custom install dir
-OLLAMA_MODEL=qwen2.5-coder:14b ./setup.sh     # bigger model
-JARVIS_PRESET=chat-simple    ./setup.sh       # different preset
-SKIP_OLLAMA=1                ./setup.sh       # only OpenJarvis
-SKIP_MODEL_PULL=1            ./setup.sh       # skip the GB download
-SKIP_INIT=1                  ./setup.sh       # don't write config
+OPENJARVIS_DIR=~/code/OpenJarvis     ./setup.sh   # custom install dir
+OLLAMA_MODEL=qwen2.5-coder:32b       ./setup.sh   # bigger primary
+OLLAMA_FALLBACK_MODEL=""             ./setup.sh   # skip fallback pull
+JARVIS_PRESET=chat-simple            ./setup.sh   # different preset
+SKIP_OLLAMA=1                        ./setup.sh   # only OpenJarvis
+SKIP_MODEL_PULL=1                    ./setup.sh   # skip the GB downloads
+SKIP_INIT=1                          ./setup.sh   # don't write config
 ```
 
 Available presets: `morning-digest-mac`, `morning-digest-linux`,
